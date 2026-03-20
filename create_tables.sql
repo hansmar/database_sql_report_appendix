@@ -1,6 +1,4 @@
--- ============================================
--- 1. Create Tables (Oracle)
--- ============================================
+-- Create Tables
 
 CREATE TABLE Person (
     person_id       NUMBER PRIMARY KEY,
@@ -80,7 +78,7 @@ CREATE TABLE Transaction_ (
     from_account_id     NUMBER,
     to_account_id       NUMBER,
     transaction_type    VARCHAR2(50),
-    amount              NUMBER(15, 2) NOT NULL,
+    amount              NUMBER(15, 2) NOT NULL CHECK (amount > 0),
     date_time           TIMESTAMP NOT NULL,
     description         VARCHAR2(255),
     status              VARCHAR2(20) DEFAULT 'Pending',

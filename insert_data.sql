@@ -1,8 +1,4 @@
--- ============================================
--- 2. Sample Data (Oracle)
--- Set SQL Developer encoding: Tools > Preferences > Environment > UTF-8
--- Safe to re-run: deletes existing data first
--- ============================================
+-- Sample Data
 
 DELETE FROM JournalEntry;
 DELETE FROM Transaction_;

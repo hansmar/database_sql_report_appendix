@@ -1,11 +1,5 @@
--- ============================================
--- 3. Stored Procedures, Trigger, and Views
--- ============================================
+-- Stored Procedures, Trigger, and Views
 
--- ==================
--- Procedure: Book a single pending transaction
--- Creates journal entries and updates balances
--- ==================
 CREATE OR REPLACE PROCEDURE book_transaction (
     p_transaction_id IN NUMBER
 ) AS
@@ -62,9 +56,8 @@ BEGIN
 END;
 /
 
--- ==================
 -- Procedure: Book all pending transactions
--- ==================
+
 CREATE OR REPLACE PROCEDURE book_all_pending
 AS
 BEGIN
@@ -78,10 +71,8 @@ BEGIN
 END;
 /
 
--- ==================
 -- Procedure: Monthly interest calculation
--- Loops through active accounts and adds interest
--- ==================
+
 CREATE OR REPLACE PROCEDURE calculate_interest (
     p_calc_date IN DATE
 ) AS
@@ -121,10 +112,9 @@ BEGIN
 END;
 /
 
--- ==================
+
 -- Trigger: Log when a transaction is booked
--- Fires when status changes from Pending to Posted
--- ==================
+
 CREATE TABLE TransactionLog (
     log_id          NUMBER PRIMARY KEY,
     transaction_id  NUMBER NOT NULL,
@@ -147,9 +137,9 @@ BEGIN
 END;
 /
 
--- ==================
+
 -- View: Account statement (kontoavrit)
--- ==================
+
 CREATE OR REPLACE VIEW v_account_statement AS
 SELECT
     a.account_id,
@@ -168,9 +158,9 @@ JOIN Person p ON c.person_id = p.person_id
 LEFT JOIN Transaction_ t ON a.account_id = t.account_id
 ORDER BY a.account_id, t.date_time;
 
--- ==================
+
 -- View: Customer overview with total balance
--- ==================
+
 CREATE OR REPLACE VIEW v_customer_overview AS
 SELECT
     c.customer_id,
@@ -185,20 +175,3 @@ JOIN Account a ON o.account_id = a.account_id
 GROUP BY c.customer_id, p.first_name, p.last_name, c.customer_type
 ORDER BY c.customer_id;
 
--- ============================================
--- HOW TO USE:
--- ============================================
--- Book all pending transactions:
---   EXEC book_all_pending;
---
--- Book a single transaction:
---   EXEC book_transaction(1);
---
--- Run interest calculation for March:
---   EXEC calculate_interest(DATE '2026-03-31');
---
--- View results:
---   SELECT * FROM v_account_statement WHERE account_id = 1001;
---   SELECT * FROM v_customer_overview;
---   SELECT * FROM TransactionLog;
--- ============================================
