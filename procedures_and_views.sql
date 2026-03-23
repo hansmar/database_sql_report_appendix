@@ -1,10 +1,13 @@
 -- Stored Procedures, Trigger, and Views
 
 CREATE OR REPLACE PROCEDURE book_transaction (
-    p_transaction_id IN NUMBER
+    p_transaction_id IN NUMBER,
+    p_auto_commit    IN BOOLEAN DEFAULT TRUE
 ) AS
-    v_rec Transaction_%ROWTYPE;
+    v_rec        Transaction_%ROWTYPE;
     v_journal_id NUMBER;
+    v_balance    NUMBER(15,2);
+    e_insufficient_funds EXCEPTION;
 BEGIN
     -- Get the transaction
     SELECT * INTO v_rec FROM Transaction_
@@ -15,20 +18,27 @@ BEGIN
         RETURN;
     END IF;
 
-    -- Get next journal ID
-    SELECT NVL(MAX(journal_entry_id), 0) + 1 INTO v_journal_id FROM JournalEntry;
+    -- Check sufficient balance for withdrawals and transfers
+    IF v_rec.transaction_type IN ('Withdrawal', 'Transfer') THEN
+        SELECT balance INTO v_balance FROM Account
+        WHERE account_id = v_rec.from_account_id;
 
-    -- Create debit journal entry
+        IF v_balance < v_rec.amount THEN
+            RAISE e_insufficient_funds;
+        END IF;
+    END IF;
+
+    -- Create debit journal entry (using sequence)
     INSERT INTO JournalEntry (journal_entry_id, transaction_id, posted_id,
         description, reference, entry_date, status)
-    VALUES (v_journal_id, p_transaction_id, p_transaction_id,
+    VALUES (seq_journal.NEXTVAL, p_transaction_id, p_transaction_id,
         'Debit: ' || v_rec.description,
         'TXN-' || p_transaction_id || '-D', SYSDATE, 'Posted');
 
-    -- Create credit journal entry
+    -- Create credit journal entry (using sequence)
     INSERT INTO JournalEntry (journal_entry_id, transaction_id, posted_id,
         description, reference, entry_date, status)
-    VALUES (v_journal_id + 1, p_transaction_id, p_transaction_id,
+    VALUES (seq_journal.NEXTVAL, p_transaction_id, p_transaction_id,
         'Credit: ' || v_rec.description,
         'TXN-' || p_transaction_id || '-C', SYSDATE, 'Posted');
 
@@ -52,7 +62,24 @@ BEGIN
     UPDATE Transaction_ SET status = 'Posted'
     WHERE transaction_id = p_transaction_id;
 
-    COMMIT;
+    -- Only commit if called directly (not from book_all_pending)
+    IF p_auto_commit THEN
+        COMMIT;
+    END IF;
+
+EXCEPTION
+    WHEN e_insufficient_funds THEN
+        ROLLBACK;
+        RAISE_APPLICATION_ERROR(-20001,
+            'Ikki nóg innistand á konti ' || v_rec.from_account_id ||
+            '. Saldo: ' || v_balance || ', Upphædd: ' || v_rec.amount);
+    WHEN NO_DATA_FOUND THEN
+        ROLLBACK;
+        RAISE_APPLICATION_ERROR(-20002,
+            'Transaktión ' || p_transaction_id || ' finnst ikki.');
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE;
 END;
 /
 
@@ -66,8 +93,17 @@ BEGIN
         WHERE status = 'Pending'
         ORDER BY date_time
     ) LOOP
-        book_transaction(rec.transaction_id);
+        -- Pass FALSE so book_transaction does not commit individually
+        book_transaction(rec.transaction_id, p_auto_commit => FALSE);
     END LOOP;
+
+    -- Single commit after all transactions are booked
+    COMMIT;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE;
 END;
 /
 
@@ -93,8 +129,8 @@ BEGIN
             CONTINUE;
         END IF;
 
-        -- Get next transaction ID
-        SELECT NVL(MAX(transaction_id), 0) + 1 INTO v_txn_id FROM Transaction_;
+        -- Get next transaction ID from sequence
+        v_txn_id := seq_transaction.NEXTVAL;
 
         -- Create interest transaction
         INSERT INTO Transaction_ (transaction_id, account_id, from_account_id,
@@ -109,6 +145,11 @@ BEGIN
     END LOOP;
 
     COMMIT;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        RAISE;
 END;
 /
 
@@ -129,7 +170,7 @@ FOR EACH ROW
 BEGIN
     INSERT INTO TransactionLog (log_id, transaction_id, old_status, new_status)
     VALUES (
-        (SELECT NVL(MAX(log_id), 0) + 1 FROM TransactionLog),
+        seq_log.NEXTVAL,
         :OLD.transaction_id,
         :OLD.status,
         :NEW.status
@@ -155,7 +196,14 @@ FROM Account a
 JOIN Owns o ON a.account_id = o.account_id
 JOIN Customer c ON o.customer_id = c.customer_id
 JOIN Person p ON c.person_id = p.person_id
-LEFT JOIN Transaction_ t ON a.account_id = t.account_id
+LEFT JOIN Transaction_ t ON (
+    (t.transaction_type IN ('Deposit', 'Withdrawal', 'Interest')
+        AND t.account_id = a.account_id)
+    OR
+    (t.transaction_type = 'Transfer'
+        AND (t.from_account_id = a.account_id
+             OR t.to_account_id = a.account_id))
+)
 ORDER BY a.account_id, t.date_time;
 
 
@@ -174,4 +222,3 @@ JOIN Owns o ON c.customer_id = o.customer_id
 JOIN Account a ON o.account_id = a.account_id
 GROUP BY c.customer_id, p.first_name, p.last_name, c.customer_type
 ORDER BY c.customer_id;
-
