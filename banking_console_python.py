@@ -24,7 +24,7 @@ def get_connection():
         conn = oracledb.connect(**DB_CONFIG)
         return conn
     except oracledb.Error as e:
-        print(f"\n  Feilur: Onki samband viÝ databasan: {e}")
+        print(f"\n  Feilur: Onki samband við databasan: {e}")
         sys.exit(1)
 
 
@@ -437,7 +437,7 @@ def run_interest(conn):
     print_header("Renturokning")
     date_str = get_input("  Dato (YYYY-MM-DD), t.d. 2026-03-31: ")
     if date_str is None:
-        print("  îgyldugt dato.")
+        print("  Ógildugt dato.")
         return
 
     cursor = conn.cursor()
@@ -447,7 +447,7 @@ def run_interest(conn):
         conn.commit()
         print(f"\n  Renturokning koyrd fyri {date_str}!")
     except ValueError:
-        print("  îgyldugt dato format. Brœka YYYY-MM-DD.")
+        print("  Ógildugt dato format. Brœka YYYY-MM-DD.")
     except oracledb.Error as e:
         conn.rollback()
         print(f"\n  Feilur: {e}")
